@@ -8,7 +8,10 @@ class Server {
     constructor(){
         this.app = express();
         this.port = process.env.PORT;
-        this.userPath = '/api/curso';
+        this.cursoPath = '/api/curso';
+        this.estudiantePath = '/api/estudiante';
+        this.actividadPath = '/api/actividad';
+        this.notaPath = '/api/nota';
 
         //conexion a bd
         this.conectarBD();
@@ -34,7 +37,10 @@ class Server {
     }
 
     routes(){
-        this.app.use(this.userPath, require('../routes/curso'));
+        this.app.use(this.cursoPath, require('../routes/curso'));
+        this.app.use(this.estudiantePath, require('../routes/estudiante'));
+        this.app.use(this.actividadPath, require('../routes/actividad'));
+        this.app.use(this.notaPath, require('../routes/nota'));
     }
 
     listen(){

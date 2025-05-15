@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const NotaSchema = new mongoose.Schema({
   idEstudiante: { type: mongoose.Schema.Types.ObjectId, ref: 'Estudiante', required: true },
-  idActividad: { type: mongoose.Schema.Types.ObjectId, ref: 'Actividad', required: true },
+  idActividad: { type: mongoose.Schema.Types.ObjectId, ref: 'Actividad', required: true },  
   nota: { type: Number, required: true },
   detallesNota: { type: String },
   fechaEntrega: { type: Date },
