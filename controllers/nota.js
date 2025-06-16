@@ -4,9 +4,40 @@ const { response } = require('express');
 const Estudiante = require('../models/estudiante');
 const Actividad = require('../models/actividad');
 const Nota = require('../models/nota');
+const Usuario = require('../models/usuario');
 
 const vacio = async ( req, res = response ) => {
     
+}
+
+const notasEstudiante = async ( req, res = response ) => {
+    const { idEstudiante } = req.params;
+
+  try {
+    const notas = await Nota.find({ idEstudiante })
+      .populate({
+        path: 'idActividad',
+        select: 'nombre tipoActividad' // Solo traemos el nombre de la actividad
+      })
+      .populate({
+        path: 'idEstudiante',
+        select: 'nombre apellido' // Solo traemos nombre y apellido
+      });
+
+    const resultado = notas.map(nota => ({
+      nombreActividad: nota.idActividad?.nombre || 'Sin nombre',
+      tipoActividad: nota.idActividad?.tipoActividad || 'Sin asignar',
+      nota: nota.nota,      
+      estado: nota.estado,
+      fechaEntrega: nota.fechaEntrega,
+      estudiante: `${nota.idEstudiante?.nombre} ${nota.idEstudiante?.apellido}`
+    }));
+
+    res.json(resultado);
+
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener notas del estudiante', error: error.message });
+  }
 }
 
 const notaPost = async ( req, res = response ) => {
@@ -68,6 +99,50 @@ const generarRanking = async ( req, res = response ) => {
     
 }
 
+const generarRankingFicha = async ( req, res = response ) => {
+
+    const { numeroFicha } = req.params;
+
+  try {
+    const ranking = await Nota.aggregate([
+      {
+        $lookup: {
+          from: 'estudiantes',
+          localField: 'idEstudiante',
+          foreignField: '_id',
+          as: 'estudiante'
+        }
+      },
+      { $unwind: '$estudiante' },
+      {
+        $match: {
+          'estudiante.numeroFicha': numeroFicha
+        }
+      },
+      {
+        $group: {
+          _id: '$idEstudiante',
+          nombre: { $first: '$estudiante.nombre' },
+          apellido: { $first: '$estudiante.apellido' },
+          numeroFicha: { $first: '$estudiante.numeroFicha' },
+          promedio: { $avg: '$nota' },
+          cantidadNotas: { $sum: 1 }
+        }
+      },
+      { $sort: { promedio: -1 } }
+    ]);
+
+    if (ranking.length === 0) {
+      return res.status(404).json({ message: `No se encontraron notas para la ficha ${numeroFicha}` });
+    }
+
+    res.json(ranking);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al generar ranking por ficha', error: error.message });
+  }
+    
+}
+
 const registrarNotas = async ( req, res = response ) => {
     try {
     const entradas = req.body;
@@ -80,12 +155,19 @@ const registrarNotas = async ( req, res = response ) => {
     const insertadas = [];
 
     for (const entrada of entradas) {
-      const { idActividad, identificacion, nota, fechaEntrega } = entrada;
+      const { idActividad, identificacion, nota, fechaEntrega, idUsuario } = entrada;
 
       // Validar existencia de la actividad
       const actividad = await Actividad.findById(idActividad);
       if (!actividad) {
-        errores.push({ identificacion, error: 'Actividad no existe' });
+        errores.push({ actividad, error: 'Actividad no existe' });
+        continue;
+      }
+
+       // Validar existencia del usuario
+      const usuario = await Usuario.findById(idUsuario);
+      if (!usuario) {
+        errores.push({ idUsuario, error: 'Usuario no encontrado' });
         continue;
       }
 
@@ -96,6 +178,7 @@ const registrarNotas = async ( req, res = response ) => {
         continue;
       }
 
+      
       // Validar que no exista ya una nota para este estudiante y actividad
       const notaExistente = await Nota.findOne({
         idEstudiante: estudiante._id,
@@ -107,13 +190,29 @@ const registrarNotas = async ( req, res = response ) => {
         continue;
       }
 
+      let estado = 'No entregada'; // valor por defecto (por si algo falla)
+
+      if (nota === 0) {
+        estado = 'No entregada';
+      } else if (nota > 0 && nota < 3.5) {
+        estado = 'No aprobada';
+      } else if (nota >= 3.5 && nota <= 5) {
+        estado = 'Aprobada';
+      } else {
+        throw new Error('La nota debe estar entre 0 y 5'); // opcional: validación adicional
+      }
+
+     
+      
+
       // Registrar nota
       const nuevaNota = new Nota({
         idEstudiante: estudiante._id,
         idActividad,
         nota,
         fechaEntrega,
-        estado: 'calificada'
+        estado,
+        idUsuario
       });
 
       await nuevaNota.save();
@@ -135,6 +234,8 @@ module.exports = {
 
     notaPost,
     generarRanking,
-    registrarNotas
+    registrarNotas,
+    generarRankingFicha,
+    notasEstudiante
 
 }

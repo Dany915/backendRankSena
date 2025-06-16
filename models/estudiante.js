@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const EstudianteSchema = new mongoose.Schema({
+  idUsuario: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: true },
   tipoId: { type: String, required: true },
   identificacion: { type: String, required: true, unique: true },
   nombre: { type: String, required: true },

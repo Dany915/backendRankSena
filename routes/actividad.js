@@ -4,13 +4,7 @@ const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
 
 
-const { 
-    actGet, 
-    actPost, 
-    actPut,
-    actGetId,
-    acGetCurso 
-} = require('../controllers/actividad');
+const { actGet, actPost, actPut, actGetId, acGetCurso } = require('../controllers/actividad');
 
 const router = Router();
 

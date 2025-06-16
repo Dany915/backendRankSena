@@ -1,11 +1,10 @@
 const mongoose = require('mongoose');
 
 const CursoSchema = new mongoose.Schema({
-  numeroFicha: { type: String, required: true, unique: true },
-  nombrePrograma: { type: String, required: true },
+  idUsuario: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: true },
+  idPrograma: { type: mongoose.Schema.Types.ObjectId, ref: 'Programa', required: true },
+  numeroFicha: { type: String, required: true, unique: true },  
   descripcion: { type: String },
-  versionPrograma: { type: String },
-  periodo: { type: String },
   lugar: { type: String },
   institucionEducativa: { type: String },
   estado: { type: String, enum: ['activo', 'inactivo'], default: 'activo' },
