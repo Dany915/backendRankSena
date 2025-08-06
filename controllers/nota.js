@@ -10,35 +10,44 @@ const vacio = async ( req, res = response ) => {
     
 }
 
-const notasEstudiante = async ( req, res = response ) => {
-    const { idEstudiante } = req.params;
+const notasEstudiante = async (req, res = response) => {
+  const { idEstudiante } = req.params;
 
   try {
     const notas = await Nota.find({ idEstudiante })
+      .sort({ createdAt: -1 }) // Ordenar por fecha de creación DESC
       .populate({
         path: 'idActividad',
-        select: 'nombre tipoActividad' // Solo traemos el nombre de la actividad
+        select: 'nombre tipoActividad area'
       })
       .populate({
         path: 'idEstudiante',
-        select: 'nombre apellido' // Solo traemos nombre y apellido
+        select: 'nombre apellido'
       });
 
-    const resultado = notas.map(nota => ({
-      nombreActividad: nota.idActividad?.nombre || 'Sin nombre',
-      tipoActividad: nota.idActividad?.tipoActividad || 'Sin asignar',
-      nota: nota.nota,      
-      estado: nota.estado,
-      fechaEntrega: nota.fechaEntrega,
-      estudiante: `${nota.idEstudiante?.nombre} ${nota.idEstudiante?.apellido}`
-    }));
+    const resultado = notas.map(nota => {
+      const fecha = new Date(nota.createdAt);
+      const fechaFormateada = `${fecha.getDate().toString().padStart(2, '0')}/${
+        (fecha.getMonth() + 1).toString().padStart(2, '0')
+      }/${fecha.getFullYear()}`;
+
+      return {
+        nombreActividad: nota.idActividad?.nombre || 'Sin nombre',
+        tipoActividad: nota.idActividad?.tipoActividad || 'Sin asignar',
+        nota: nota.nota,
+        area: nota.idActividad?.area,
+        estado: nota.estado,        
+        fechaEntrega: fechaFormateada,
+        estudiante: `${nota.idEstudiante?.nombre} ${nota.idEstudiante?.apellido}`
+      };
+    });
 
     res.json(resultado);
 
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener notas del estudiante', error: error.message });
   }
-}
+};
 
 const notaPost = async ( req, res = response ) => {
     try {
