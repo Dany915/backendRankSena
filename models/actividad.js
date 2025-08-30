@@ -8,6 +8,7 @@ const ActividadSchema = new mongoose.Schema({
   competencia: { type: String },
   tipoActividad: { type: String },
   area: { type: String },
+  tipoNota: {type: String},
   criterioEvaluacion: { type: String },
   instrumentoEvaluacion: { type: String },
   tecnicaEvaluacion: { type: String },

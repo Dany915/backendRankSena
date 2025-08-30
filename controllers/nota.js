@@ -6,7 +6,299 @@ const Actividad = require('../models/actividad');
 const Nota = require('../models/nota');
 const Usuario = require('../models/usuario');
 
+const formatearFecha = (fecha) => {
+  const d = new Date(fecha);
+  const dia = String(d.getDate()).padStart(2, '0');
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const anio = d.getFullYear();
+  return `${dia}/${mes}/${anio}`;
+};
+
 const vacio = async ( req, res = response ) => {
+    
+}
+
+const generarRankingCurso = async ( req, res = response ) => {
+
+  const { numeroFicha } = req.params;
+
+  try {
+    // Verificar si hay estudiantes con esa ficha
+    const existeFicha = await Estudiante.exists({ numeroFicha });
+    if (!existeFicha) {
+      return res.status(404).json({
+        message: `No se encontró ningún estudiante con la ficha ${numeroFicha}`
+      });
+    }
+
+    const ranking = await Nota.aggregate([
+      // Join con estudiante
+      {
+        $lookup: {
+          from: 'estudiantes',
+          localField: 'idEstudiante',
+          foreignField: '_id',
+          as: 'estudiante'
+        }
+      },
+      { $unwind: '$estudiante' },
+
+      // Filtrar por ficha
+      {
+        $match: {
+          'estudiante.numeroFicha': numeroFicha
+        }
+      },
+
+      // Join con actividad
+      {
+        $lookup: {
+          from: 'actividads',
+          localField: 'idActividad',
+          foreignField: '_id',
+          as: 'actividad'
+        }
+      },
+      { $unwind: '$actividad' },
+
+      // Agrupar por estudiante + área
+      {
+        $group: {
+          _id: {
+            estudianteId: '$estudiante._id',
+            area: '$actividad.area'
+          },
+          nombre: { $first: '$estudiante.nombre' },
+          apellido: { $first: '$estudiante.apellido' },
+          notasActividad: {
+            $push: {
+              tipo: '$actividad.tipoNota',
+              nota: '$nota'
+            }
+          }
+        }
+      },
+
+      // Calcular promedios por tipo de nota
+      {
+        $project: {
+          estudianteId: '$_id.estudianteId',
+          nombre: 1,
+          apellido: 1,
+          promedioActividad: {
+            $avg: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: '$notasActividad',
+                    as: 'nota',
+                    cond: { $eq: ['$$nota.tipo', 'Actividad'] }
+                  }
+                },
+                as: 'nota',
+                in: '$$nota.nota'
+              }
+            }
+          },
+          promedioTest: {
+            $avg: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: '$notasActividad',
+                    as: 'nota',
+                    cond: { $eq: ['$$nota.tipo', 'Test Teorico/Practico'] }
+                  }
+                },
+                as: 'nota',
+                in: '$$nota.nota'
+              }
+            }
+          }
+        }
+      },
+
+      // Calcular nota final por área
+      {
+        $project: {
+          estudianteId: 1,
+          nombre: 1,
+          apellido: 1,
+          notaFinal: {
+            $cond: {
+              if: { $eq: ['$promedioTest', 0] },
+              then: '$promedioActividad',
+              else: {
+                $add: [
+                  { $multiply: ['$promedioActividad', 0.7] },
+                  { $multiply: ['$promedioTest', 0.3] }
+                ]
+              }
+            }
+          }
+        }
+      },
+
+      // Agrupar por estudiante para promedio general
+      {
+        $group: {
+          _id: '$estudianteId',
+          nombre: { $first: '$nombre' },
+          apellido: { $first: '$apellido' },
+          promedioGeneral: { $avg: '$notaFinal' }
+        }
+      },
+
+      // Ordenar y limitar
+      { $sort: { promedioGeneral: -1 } },
+      { $limit: 10 }
+    ]);
+
+    if (ranking.length === 0) {
+      return res.status(404).json({
+        message: `No se encontraron notas para la ficha ${numeroFicha}`
+      });
+    }
+
+    res.json(ranking);
+
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error al generar el ranking',
+      error: error.message
+    });
+  }
+}
+
+
+const obtenerNotasPorAreaDeEstudiante = async ( req, res = response ) => {
+ const { identificacion, area } = req.params;
+
+  try {
+    // Buscar estudiante
+    const estudiante = await Estudiante.findOne({ identificacion });
+    if (!estudiante) {
+      return res.status(404).json({ message: 'Estudiante no encontrado' });
+    }
+
+    // Buscar notas con actividades que coincidan con el área
+    const notas = await Nota.find({ idEstudiante: estudiante._id })
+      .populate({
+        path: 'idActividad',
+        match: { area },
+        select: 'nombre tipoNota descripcion area',
+      });
+
+    // Filtrar solo notas con actividad encontrada (no null por el match)
+    const resultados = notas
+      .filter(nota => nota.idActividad !== null)
+      .map(nota => ({
+        estado: nota.estado,
+        fechaEntrega: nota.fechaEntrega ? formatearFecha(nota.fechaEntrega) : 'Sin fecha',
+        nota: nota.nota,
+        nombre: nota.idActividad.nombre,
+        tipoActividad: nota.idActividad.tipoNota,
+        descripcion: nota.idActividad.descripcion || '',
+      }));
+
+    if (resultados.length === 0) {
+      return res.status(404).json({
+        message: `No se encontraron notas en el área "${area}" para el estudiante con identificación ${identificacion}`
+      });
+    }
+
+    res.json({
+      estudiante: `${estudiante.nombre} ${estudiante.apellido}`,
+      area,
+      actividades: resultados
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al obtener notas por área', error: error.message });
+  }   
+}
+
+const generarEstadisticas = async ( req, res = response ) => {
+  const { identificacion } = req.params;
+
+  try {
+    const estudiante = await Estudiante.findOne({ identificacion });
+    if (!estudiante) {
+      return res.status(404).json({ message: 'Estudiante no encontrado' });
+    }
+
+    const notas = await Nota.find({ idEstudiante: estudiante._id }).populate('idActividad');
+
+    const resumen = {};
+
+    for (const nota of notas) {
+      const actividad = nota.idActividad;
+      if (!actividad) continue;
+
+      const area = actividad.area;
+
+      if (!resumen[area]) {
+        resumen[area] = {
+          numeroNotas: 0,
+          numeroNotasAprobadas: 0,
+          promedioActividad: [],
+          promedioTest: [],
+        };
+      }
+
+      resumen[area].numeroNotas += 1;
+
+      if (nota.nota >= 3.5) {
+        resumen[area].numeroNotasAprobadas += 1;
+      }
+
+      if (actividad.tipoNota === 'Actividad') {
+        resumen[area].promedioActividad.push(nota.nota);
+      } else if (actividad.tipoNota === 'Test Teorico/Practico') {
+        resumen[area].promedioTest.push(nota.nota);
+      }
+    }
+
+    // Calcular promedios y nota final
+    for (const area in resumen) {
+      const datos = resumen[area];
+
+      const promedioAct = datos.promedioActividad.length > 0
+        ? datos.promedioActividad.reduce((a, b) => a + b, 0) / datos.promedioActividad.length
+        : 0;
+
+      const promedioTest = datos.promedioTest.length > 0
+        ? datos.promedioTest.reduce((a, b) => a + b, 0) / datos.promedioTest.length
+        : 0;
+
+      let notaFinal;
+
+      if (promedioTest === 0) {
+        notaFinal = promedioAct;
+      } else {
+        notaFinal = (promedioAct * 0.7) + (promedioTest * 0.3);
+      }
+
+      resumen[area] = {
+        numeroNotas: datos.numeroNotas,
+        numeroNotasAprobadas: datos.numeroNotasAprobadas,
+        promedioActividad: promedioAct.toFixed(2),
+        promedioTest: promedioTest.toFixed(2),
+        notaFinal: notaFinal.toFixed(2),
+      };
+    }
+
+    // Respuesta final con nombre completo
+    res.json({
+      estudiante: `${estudiante.nombre} ${estudiante.apellido}`,
+      resumen,
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al generar resumen por área', error: error.message });
+  }
     
 }
 
@@ -242,9 +534,12 @@ const registrarNotas = async ( req, res = response ) => {
 module.exports = {
 
     notaPost,
+    generarEstadisticas,
     generarRanking,
     registrarNotas,
     generarRankingFicha,
-    notasEstudiante
+    notasEstudiante,
+    obtenerNotasPorAreaDeEstudiante,
+    generarRankingCurso
 
 }

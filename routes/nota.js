@@ -9,6 +9,9 @@ const {
     registrarNotas,
     generarRankingFicha,
     notasEstudiante,
+    generarEstadisticas,
+    obtenerNotasPorAreaDeEstudiante,
+    generarRankingCurso,
   } = require('../controllers/nota');
 
 const router = Router();
@@ -19,11 +22,29 @@ router.post('/',[
     validarCampos
 ], notaPost);
 
+router.get('/ranking/top10/:numeroFicha',[
+    //check('usuario', 'No es un usuario válido').isMongoId(),
+    //check('numeroFicha', 'El numero de ficha es obligatorio').not().isEmpty(),
+    validarCampos
+], generarRankingCurso);
+
 router.get('/ranking',[
     //check('usuario', 'No es un usuario válido').isMongoId(),
     //check('numeroFicha', 'El numero de ficha es obligatorio').not().isEmpty(),
     validarCampos
 ], generarRanking);
+
+router.get('/estadisticas/:identificacion',[
+    //check('usuario', 'No es un usuario válido').isMongoId(),
+    //check('numeroFicha', 'El numero de ficha es obligatorio').not().isEmpty(),
+    validarCampos
+], generarEstadisticas);
+
+router.get('/estadistica/estudiante/:identificacion/:area',[
+    //check('usuario', 'No es un usuario válido').isMongoId(),
+    //check('numeroFicha', 'El numero de ficha es obligatorio').not().isEmpty(),
+    validarCampos
+], obtenerNotasPorAreaDeEstudiante);
 
 router.get('/ranking/:numeroFicha',[
     //check('usuario', 'No es un usuario válido').isMongoId(),
