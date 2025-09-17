@@ -126,18 +126,19 @@ const generarRankingCurso = async ( req, res = response ) => {
           apellido: 1,
           notaFinal: {
             $cond: {
-              if: { $eq: ['$promedioTest', 0] },
-              then: '$promedioActividad',
+              if: { $or: [{ $eq: ['$promedioTest', 0] }, { $eq: ['$promedioTest', null] }] },
+              then: { $ifNull: ['$promedioActividad', 0] },
               else: {
                 $add: [
-                  { $multiply: ['$promedioActividad', 0.7] },
-                  { $multiply: ['$promedioTest', 0.3] }
+                  { $multiply: [{ $ifNull: ['$promedioActividad', 0] }, 0.7] },
+                  { $multiply: [{ $ifNull: ['$promedioTest', 0] }, 0.3] }
                 ]
               }
             }
           }
         }
-      },
+      }
+      ,
 
       // Agrupar por estudiante para promedio general
       {
@@ -151,7 +152,7 @@ const generarRankingCurso = async ( req, res = response ) => {
 
       // Ordenar y limitar
       { $sort: { promedioGeneral: -1 } },
-      { $limit: 10 }
+      //{ $limit: 10 }
     ]);
 
     if (ranking.length === 0) {
@@ -274,7 +275,9 @@ const generarEstadisticas = async ( req, res = response ) => {
 
       let notaFinal;
 
-      if (promedioTest === 0) {
+      if (promedioTest === 0 ) {
+        notaFinal = promedioAct;
+      } else if( promedioTest == null){
         notaFinal = promedioAct;
       } else {
         notaFinal = (promedioAct * 0.7) + (promedioTest * 0.3);
